@@ -1,4 +1,4 @@
-# GPT Image 2 Web
+# 霜华 Image 2 
 
 一个基于 Express 的 GPT Image 2 图像生成与编辑网页应用。后端作为 API 代理，前端为原生 HTML/CSS/JavaScript，无打包构建流程。
 
