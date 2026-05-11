@@ -5,6 +5,7 @@
   const MAX_UPLOAD_FILE_BYTES = 20 * 1024 * 1024;
   const MAX_TOTAL_UPLOAD_BYTES = 200 * 1024 * 1024;
   const MAX_UPLOAD_FILES = 10;
+  const PRESET_SIZES = new Set(['auto', '1024x1024', '1536x1024', '1024x1536', '2048x2048']);
 
   const state = {
     config: { url: '', key: '' },
@@ -45,7 +46,11 @@
     $('#apiUrl').value = state.config.url;
     $('#apiKey').value = state.config.key;
     $('#quality').value = state.quality;
-    $('#size').value = state.size;
+    const isPresetSize = PRESET_SIZES.has(state.size);
+    $('#size').value = isPresetSize ? state.size : 'custom';
+    $('#customSize').value = isPresetSize ? '' : state.size;
+    $('#settingsError').style.display = 'none';
+    updateCustomSizeVisibility();
     $('#model').value = state.model;
     $('#streamMode').value = state.streamMode;
     $('#settingsModal').style.display = 'flex';
@@ -59,12 +64,51 @@
     state.config.url = $('#apiUrl').value.trim();
     state.config.key = $('#apiKey').value.trim();
     state.quality = $('#quality').value;
-    state.size = $('#size').value;
+    const size = getSelectedSize();
+    if (!size.ok) {
+      showSettingsError(size.error);
+      return;
+    }
+    state.size = size.value;
     state.model = $('#model').value;
     state.streamMode = $('#streamMode').value;
     saveConfig();
     hideSettingsModal();
     updateSendBtn();
+  }
+
+  function updateCustomSizeVisibility() {
+    $('#customSizeWrap').style.display = $('#size').value === 'custom' ? 'block' : 'none';
+  }
+
+  function showSettingsError(message) {
+    const error = $('#settingsError');
+    error.textContent = message;
+    error.style.display = 'block';
+  }
+
+  function getSelectedSize() {
+    if ($('#size').value !== 'custom') return { ok: true, value: $('#size').value };
+    return normalizeImageSize($('#customSize').value);
+  }
+
+  function normalizeImageSize(size) {
+    const normalized = String(size || '').trim().toLowerCase().replace(/\s+/g, '').replace('×', 'x');
+    const match = /^(\d{1,4})x(\d{1,4})$/.exec(normalized);
+    if (!match) return { ok: false, error: '请输入类似 2048x1152 的自定义尺寸' };
+
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+      return { ok: false, error: '图片宽高必须是正整数' };
+    }
+    if (width > 3840 || height > 3840) return { ok: false, error: '最长边不能超过 3840px' };
+    if (width % 16 !== 0 || height % 16 !== 0) return { ok: false, error: '宽高都必须是 16px 的倍数' };
+    if (Math.max(width, height) / Math.min(width, height) > 3) return { ok: false, error: '长短边比例不能超过 3:1' };
+
+    const pixels = width * height;
+    if (pixels < 655360 || pixels > 8294400) return { ok: false, error: '总像素必须在 655,360 到 8,294,400 之间' };
+    return { ok: true, value: `${width}x${height}` };
   }
 
   function updateSendBtn() {
@@ -784,6 +828,14 @@
     $('#toggleKeyBtn').addEventListener('click', () => {
       const input = $('#apiKey');
       input.type = input.type === 'password' ? 'text' : 'password';
+    });
+    $('#size').addEventListener('change', () => {
+      updateCustomSizeVisibility();
+      $('#settingsError').style.display = 'none';
+      if ($('#size').value === 'custom') $('#customSize').focus();
+    });
+    $('#customSize').addEventListener('input', () => {
+      $('#settingsError').style.display = 'none';
     });
 
     $('#sendBtn').addEventListener('click', startGeneration);

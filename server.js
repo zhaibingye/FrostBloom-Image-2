@@ -165,6 +165,26 @@ function validatePrompt(prompt) {
   return typeof prompt === 'string' && prompt.trim() && prompt.length <= MAX_PROMPT_LENGTH;
 }
 
+function normalizeImageSize(size) {
+  if (!size || size === 'auto') return 'auto';
+  if (typeof size !== 'string' || size.length > 16) throw createHttpError('图片尺寸格式无效');
+
+  const normalized = size.trim().toLowerCase().replace(/\s+/g, '').replace('×', 'x');
+  const match = /^(\d{1,4})x(\d{1,4})$/.exec(normalized);
+  if (!match) throw createHttpError('图片尺寸格式无效，请使用 2048x1152 这样的格式');
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) throw createHttpError('图片宽高必须是正整数');
+  if (width > 3840 || height > 3840) throw createHttpError('图片最长边不能超过 3840px');
+  if (width % 16 !== 0 || height % 16 !== 0) throw createHttpError('图片宽高都必须是 16px 的倍数');
+  if (Math.max(width, height) / Math.min(width, height) > 3) throw createHttpError('图片长短边比例不能超过 3:1');
+
+  const pixels = width * height;
+  if (pixels < 655360 || pixels > 8294400) throw createHttpError('图片总像素必须在 655,360 到 8,294,400 之间');
+  return `${width}x${height}`;
+}
+
 function createTask(type) {
   cleanupTasks();
   const runningCount = Array.from(tasks.values()).filter(task => task.status === 'pending' || task.status === 'running').length;
@@ -496,19 +516,20 @@ app.post('/api/generate', async (req, res) => {
     if (!validateConfig(config)) return res.status(400).json({ error: '请先设置 API URL 和 Key' });
     const apiBaseUrl = await assertSafeApiUrl(config.url);
     if (!validatePrompt(prompt)) return res.status(400).json({ error: '请输入 1-20000 字的提示词' });
+    const imageSize = normalizeImageSize(size);
 
     let task;
     if (stream !== false) {
       const responseModel = assertResponseModel(model);
       task = createTask('generate');
       const apiUrl = `${apiBaseUrl}/responses`;
-      runTask(task, () => fetchResponseStreamTask(task, apiUrl, { input: prompt, quality, size, config, model: responseModel, action: 'generate' }));
+      runTask(task, () => fetchResponseStreamTask(task, apiUrl, { input: prompt, quality, size: imageSize, config, model: responseModel, action: 'generate' }));
     } else {
       task = createTask('generate');
       const apiUrl = `${apiBaseUrl}/images/generations`;
       const body = { model: 'gpt-image-2', prompt };
       if (quality && quality !== 'auto') body.quality = quality;
-      if (size && size !== 'auto') body.size = size;
+      if (imageSize && imageSize !== 'auto') body.size = imageSize;
       if (n && Number(n) > 1) body.n = Number(n);
       if (format && format !== 'png') body.output_format = format;
       runTask(task, () => fetchWithTimeout(apiUrl, {
@@ -535,6 +556,7 @@ app.post('/api/edit', limitUploadConcurrency, upload.fields([{ name: 'images', m
     if (!validateConfig(config)) return res.status(400).json({ error: '请先设置 API URL 和 Key' });
     const apiBaseUrl = await assertSafeApiUrl(config.url);
     if (!validatePrompt(prompt)) return res.status(400).json({ error: '请输入 1-20000 字的提示词' });
+    const imageSize = normalizeImageSize(size);
     if (!req.files?.images?.length) return res.status(400).json({ error: '图生图需要至少一张图片' });
     assertUploadLimits(req.files);
     if (stream !== 'false' && req.files.mask?.length) return res.status(400).json({ error: 'Responses 模式暂不支持 mask，请切换到 Image API 模式' });
@@ -549,12 +571,12 @@ app.post('/api/edit', limitUploadConcurrency, upload.fields([{ name: 'images', m
       task = createTask('edit');
       runTask(task, () => {
         const input = buildResponseEditInput(prompt, files);
-        return fetchResponseStreamTask(task, `${apiBaseUrl}/responses`, { input, quality, size, config, model: responseModel, action: 'edit' });
+        return fetchResponseStreamTask(task, `${apiBaseUrl}/responses`, { input, quality, size: imageSize, config, model: responseModel, action: 'edit' });
       });
     } else {
       task = createTask('edit');
       runTask(task, () => {
-        const form = buildEditForm({ prompt, quality, size, format, files });
+        const form = buildEditForm({ prompt, quality, size: imageSize, format, files });
         return fetchWithTimeout(`${apiBaseUrl}/images/edits`, {
           method: 'POST',
           headers: { ...form.getHeaders(), 'Authorization': `Bearer ${config.key.trim()}` },

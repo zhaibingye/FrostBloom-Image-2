@@ -135,7 +135,12 @@
             <option value="1536x1024">1536×1024</option>
             <option value="1024x1536">1024×1536</option>
             <option value="2048x2048">2048×2048</option>
+            <option value="custom">自定义</option>
           </select>
+          <div id="customSizeWrap" class="custom-size-wrap" style="display:none;">
+            <input id="customSize" type="text" placeholder="例如 2048x1152">
+          </div>
+          <div class="form-hint">自定义尺寸需为 16 的倍数，最长边不超过 3840，比例不超过 3:1。</div>
         </div>
       </div>
       <div class="form-row">
@@ -156,6 +161,7 @@
         </div>
       </div>
       <div class="modal-actions">
+        <div id="settingsError" class="form-error" style="display:none;"></div>
         <button id="saveSettings" class="btn-primary">保存设置</button>
       </div>
     </div>

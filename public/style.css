@@ -713,6 +713,10 @@ body {
   transition: border-color 0.15s;
 }
 
+.custom-size-wrap {
+  margin-top: 8px;
+}
+
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
@@ -780,6 +784,8 @@ body {
 .btn-primary:hover { opacity: 0.9; }
 
 .modal-actions { margin-top: 8px; }
+
+.modal-actions .form-error { margin-bottom: 8px; }
 
 /* Image Modal */
 .image-modal-content {
